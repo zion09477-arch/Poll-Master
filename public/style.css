@@ -1,0 +1,183 @@
+/* Poll Master - Premium UI Styles */
+
+/* Candidate Cards - 3D Glass Effect */
+.candidate-card {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.candidate-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.candidate-card:hover::before {
+  left: 100%;
+}
+
+.candidate-card:hover {
+  transform: translateY(-8px);
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 25px 35px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+/* Vote Button */
+.vote-btn {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(139, 92, 246, 0.9));
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.vote-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s;
+}
+
+.vote-btn:active::after {
+  width: 100%;
+  height: 100%;
+}
+
+.vote-btn:active {
+  transform: scale(0.96);
+}
+
+.vote-btn:disabled {
+  background: linear-gradient(135deg, #475569, #334155);
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Candidate Image */
+.candidate-image {
+  object-fit: cover;
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  transition: transform 0.5s ease;
+}
+
+.candidate-card:hover .candidate-image {
+  transform: scale(1.02);
+}
+
+/* Admin Rows */
+.admin-candidate-row {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.admin-candidate-row:hover {
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateX(4px);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+/* Toast Animation */
+@keyframes slideInOut {
+  0% {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  90% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+}
+
+.toast-fade-out {
+  animation: slideInOut 3s ease forwards;
+}
+
+/* Chart Styling */
+canvas {
+  max-width: 100%;
+  height: auto;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .candidate-image {
+    height: 160px;
+  }
+  
+  h1 {
+    font-size: 2.5rem !important;
+  }
+  
+  #pollTitle {
+    font-size: 1rem !important;
+  }
+}
+
+/* Loading Pulse Animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  }
+}
+
+.live-indicator {
+  animation: pulse-glow 2s ease-in-out infinite;
+}

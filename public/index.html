@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poll Master | Enterprise Realtime Polling System</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="/style.css">
+  
+  <style>
+    /* Animated background gradient */
+    body {
+      background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0f172a, #1e1b4b);
+      background-size: 400% 400%;
+      animation: gradientShift 15s ease infinite;
+    }
+    
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  
+  <div class="container mx-auto px-4 py-8 max-w-7xl relative z-10">
+    
+    <!-- Animated Header -->
+    <div class="text-center mb-12">
+      <div class="relative inline-block">
+        <div class="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 rounded-full"></div>
+        <div class="flex items-center justify-center gap-4 mb-4 relative">
+          <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <i class="fas fa-chart-simple text-2xl text-white"></i>
+          </div>
+          <h1 class="text-6xl font-black bg-gradient-to-r from-white via-indigo-200 to-purple-200 bg-clip-text text-transparent tracking-tight">
+            POLL MASTER
+          </h1>
+        </div>
+      </div>
+      
+      <!-- Elegant Title Display with Glass Effect -->
+      <div id="pollTitleContainer" class="flex justify-center mt-8">
+        <div id="pollTitleBadge" class="group relative inline-flex items-center gap-3 px-8 py-4 bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 hover:border-indigo-400/50 transition-all duration-300 shadow-xl">
+          <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          <i class="fas fa-poll text-indigo-400 text-lg"></i>
+          <span id="pollTitle" class="text-xl font-semibold text-slate-200 tracking-wide">Awaiting administrator</span>
+          <div class="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Admin Unlock Panel - Glass Card -->
+    <div id="adminUnlockPanel" class="mb-8 hidden">
+      <div class="max-w-md mx-auto">
+        <div class="relative bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl overflow-hidden">
+          <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
+          <div class="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/20 rounded-full blur-3xl"></div>
+          
+          <div class="flex items-center gap-3 mb-6 relative z-10">
+            <div class="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+              <i class="fas fa-shield-alt text-white"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white">Administrator Access</h2>
+          </div>
+          
+          <div class="flex flex-col gap-4 relative z-10">
+            <input type="password" id="adminSecret" placeholder="Enter security credentials" 
+                   class="w-full px-5 py-3 rounded-xl bg-slate-900/50 text-white border border-white/10 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all">
+            <button id="unlockAdminBtn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/30">
+              <i class="fas fa-unlock-alt"></i> Authenticate
+            </button>
+          </div>
+          <p id="adminError" class="text-red-400 text-sm mt-3 hidden text-center relative z-10"></p>
+          <p class="text-slate-500 text-xs text-center mt-6 relative z-10">
+            <i class="fas fa-mouse-pointer mr-1"></i> Double-click "POLL MASTER" to access
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Admin Panel - Premium Glass Design -->
+    <div id="adminPanel" class="mb-8 hidden">
+      <div class="relative bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl"></div>
+        
+        <div class="relative z-10 p-6">
+          <div class="flex flex-wrap justify-between items-center mb-6 pb-4 border-b border-white/10">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <i class="fas fa-crown text-white"></i>
+              </div>
+              <h2 class="text-2xl font-bold text-white">Administrator Console</h2>
+            </div>
+            <div class="flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-full border border-emerald-500/30">
+              <i class="fas fa-circle text-emerald-400 text-xs animate-pulse"></i>
+              <span class="text-emerald-300 text-sm font-medium">Active Session</span>
+            </div>
+          </div>
+          
+          <!-- Set Poll Title -->
+          <div class="bg-slate-900/40 rounded-xl p-5 mb-6 border border-white/5">
+            <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <div class="w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
+                <i class="fas fa-heading text-xs text-white"></i>
+              </div>
+              Set Poll Title
+            </h3>
+            <div class="flex flex-col md:flex-row gap-4">
+              <input type="text" id="pollTitleInput" placeholder="Enter poll question (e.g., Who is the G.O.A.T.?)" 
+                     class="flex-1 px-5 py-3 rounded-xl bg-slate-800/50 text-white border border-white/10 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all">
+              <button id="setPollTitleBtn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold px-8 py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/30">
+                <i class="fas fa-save"></i> Set Title
+              </button>
+            </div>
+          </div>
+          
+          <!-- Add Candidate -->
+          <div class="bg-slate-900/40 rounded-xl p-5 mb-6 border border-white/5">
+            <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <div class="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
+                <i class="fas fa-user-plus text-xs text-white"></i>
+              </div>
+              Register Candidate
+            </h3>
+            <div class="grid md:grid-cols-2 gap-4">
+              <input type="text" id="candidateName" placeholder="Full name" 
+                     class="px-5 py-3 rounded-xl bg-slate-800/50 text-white border border-white/10 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all">
+              <input type="text" id="candidateImage" placeholder="Image URL (optional)" 
+                     class="px-5 py-3 rounded-xl bg-slate-800/50 text-white border border-white/10 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all">
+              <button id="addCandidateBtn" class="md:col-span-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
+                <i class="fas fa-plus-circle"></i> Add Candidate
+              </button>
+            </div>
+          </div>
+          
+          <!-- Poll Controls -->
+          <div class="flex flex-wrap gap-4 mb-6">
+            <button id="resetPollBtn" class="bg-amber-600/80 hover:bg-amber-600 text-white font-semibold px-5 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 backdrop-blur border border-amber-500/30">
+              <i class="fas fa-rotate-left"></i> Reset All Votes
+            </button>
+            <button id="revealResultsBtn" class="bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-semibold px-6 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg shadow-rose-500/30">
+              <i class="fas fa-chart-line"></i> Reveal Results
+            </button>
+          </div>
+          
+          <!-- Stats Cards -->
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="relative overflow-hidden bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-xl p-4 text-center border border-white/10 backdrop-blur">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-indigo-500/20 rounded-full blur-xl"></div>
+              <i class="fas fa-vote-yea text-indigo-400 text-2xl mb-2 relative z-10"></i>
+              <p class="text-slate-400 text-sm relative z-10">Total Ballots</p>
+              <p id="adminTotalVotes" class="text-4xl font-bold text-white relative z-10">0</p>
+            </div>
+            <div class="relative overflow-hidden bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-xl p-4 text-center border border-white/10 backdrop-blur">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-500/20 rounded-full blur-xl"></div>
+              <i class="fas fa-users text-emerald-400 text-2xl mb-2 relative z-10"></i>
+              <p class="text-slate-400 text-sm relative z-10">Participants</p>
+              <p id="adminParticipants" class="text-4xl font-bold text-white relative z-10">0</p>
+            </div>
+          </div>
+          
+          <!-- Candidate Registry -->
+          <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <div class="w-6 h-6 bg-gradient-to-br from-slate-500 to-slate-600 rounded-lg flex items-center justify-center">
+              <i class="fas fa-list text-xs text-white"></i>
+            </div>
+            Candidate Registry
+          </h3>
+          <div id="adminCandidatesList" class="space-y-2 max-h-64 overflow-y-auto">
+            <div class="text-center py-8">
+              <i class="fas fa-database text-3xl text-slate-600 mb-2"></i>
+              <p class="text-slate-500">No candidates added yet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Voter Area -->
+    <div id="voterArea">
+      <!-- Empty State -->
+      <div id="emptyState" class="text-center py-20 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+        <div class="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center">
+          <i class="fas fa-hourglass-half text-4xl text-slate-500"></i>
+        </div>
+        <p class="text-slate-300 text-xl font-medium mb-2">Poll not yet configured</p>
+        <p class="text-slate-500">Waiting for administrator to set up the poll</p>
+      </div>
+      
+      <!-- Candidates Grid -->
+      <div id="candidatesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 hidden">
+        <!-- Dynamic candidate cards -->
+      </div>
+      
+      <!-- Voter Stats -->
+      <div id="voterStats" class="text-center text-slate-400 border-t border-white/10 pt-6 mt-4 hidden">
+        <div class="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full">
+          <i class="fas fa-users text-indigo-400"></i>
+          <span id="participantCount" class="font-semibold">0</span>
+          <span>active participants</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Results Area -->
+    <div id="resultsArea" class="hidden">
+      <div class="relative bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl"></div>
+        
+        <div id="winnerBanner" class="relative text-center mb-8 p-6 bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 rounded-2xl border border-amber-500/30 overflow-hidden">
+          <div class="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10"></div>
+          <i class="fas fa-trophy text-5xl text-amber-400 mb-3 relative z-10"></i>
+          <h2 class="text-3xl font-bold text-white relative z-10" id="winnerText">-</h2>
+        </div>
+        
+        <h3 class="text-2xl font-bold text-white mb-6 text-center">Final Tabulation</h3>
+        <div class="max-w-2xl mx-auto">
+          <canvas id="resultsChart" width="400" height="300" class="mb-6"></canvas>
+        </div>
+        
+        <div class="text-center text-slate-300 space-y-2">
+          <p><i class="fas fa-chart-simple mr-2 text-indigo-400"></i>Total votes cast: <span id="finalTotalVotes" class="font-bold text-white text-xl">0</span></p>
+          <p><i class="fas fa-user-check mr-2 text-emerald-400"></i><span id="finalParticipants">0</span> participants</p>
+          <p class="mt-6 text-emerald-400"><i class="fas fa-check-circle mr-2"></i>Poll has concluded. Thank you for participating.</p>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- Toast Notification -->
+  <div id="confirmationMessage" class="fixed bottom-6 right-6 hidden z-50">
+    <div class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur">
+      <i class="fas fa-check-circle"></i>
+      <span id="confirmText" class="font-medium"></span>
+    </div>
+  </div>
+  
+  <script src="/script.js"></script>
+</body>
+</html>
