@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poll Master | Vote</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0f172a, #1e1b4b); background-size: 400% 400%; animation: gradientShift 15s ease infinite; }
+    @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    .candidate-card { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1rem; transition: all 0.3s ease; overflow: hidden; }
+    .candidate-card:hover { transform: translateY(-8px); border-color: rgba(99, 102, 241, 0.4); box-shadow: 0 25px 35px -12px rgba(0,0,0,0.5); }
+    .candidate-image { object-fit: cover; width: 100%; height: 200px; background: linear-gradient(135deg, #1e293b, #0f172a); transition: transform 0.5s ease; }
+    .candidate-card:hover .candidate-image { transform: scale(1.02); }
+    .vote-btn { background: linear-gradient(135deg, rgba(99,102,241,0.9), rgba(139,92,246,0.9)); transition: all 0.2s ease; }
+    .vote-btn:active { transform: scale(0.96); }
+    .vote-btn:disabled { background: #475569; opacity: 0.7; cursor: not-allowed; }
+    @keyframes slideInOut { 0% { opacity: 0; transform: translateX(100px); } 10% { opacity: 1; transform: translateX(0); } 90% { opacity: 1; } 100% { opacity: 0; transform: translateX(100px); } }
+    .toast-fade-out { animation: slideInOut 3s ease forwards; }
+    @media (max-width: 768px) { .candidate-image { height: 160px; } }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-7xl">
+    
+    <div class="text-center mb-8">
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <i class="fas fa-chart-simple text-2xl text-white"></i>
+        </div>
+        <h1 class="text-5xl font-black bg-gradient-to-r from-white via-indigo-200 to-purple-200 bg-clip-text text-transparent">POLL MASTER</h1>
+      </div>
+      <div class="flex justify-center mt-6">
+        <div class="inline-flex items-center gap-3 px-8 py-4 bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10">
+          <i class="fas fa-poll text-indigo-400 text-lg"></i>
+          <span id="pollTitle" class="text-xl font-semibold text-slate-200">Loading...</span>
+        </div>
+      </div>
+    </div>
+    
+    <div id="voterArea">
+      <div id="emptyState" class="text-center py-20 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+        <div class="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center"><i class="fas fa-hourglass-half text-4xl text-slate-500"></i></div>
+        <p class="text-slate-300 text-xl font-medium mb-2">No candidates yet</p>
+        <p class="text-slate-500">Waiting for administrator to add candidates</p>
+      </div>
+      <div id="candidatesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 hidden"></div>
+      <div id="voterStats" class="text-center text-slate-400 border-t border-white/10 pt-6 mt-4 hidden">
+        <div class="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full"><i class="fas fa-users text-indigo-400"></i><span id="participantCount" class="font-semibold">0</span><span>active voters</span></div>
+      </div>
+    </div>
+    
+    <div id="resultsArea" class="hidden">
+      <div class="relative bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl">
+        <div id="winnerBanner" class="text-center mb-8 p-6 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-2xl border border-amber-500/30"><i class="fas fa-trophy text-5xl text-amber-400 mb-3"></i><h2 class="text-3xl font-bold text-white" id="winnerText">-</h2></div>
+        <h3 class="text-2xl font-bold text-white mb-6 text-center">Final Results</h3>
+        <div class="max-w-2xl mx-auto"><canvas id="resultsChart" width="400" height="300" class="mb-6"></canvas></div>
+        <div class="text-center text-slate-300"><p><i class="fas fa-chart-simple mr-2 text-indigo-400"></i>Total votes: <span id="finalTotalVotes" class="font-bold text-white text-xl">0</span></p><p><i class="fas fa-user-check mr-2 text-emerald-400"></i><span id="finalParticipants">0</span> participated</p><p class="mt-6 text-emerald-400"><i class="fas fa-check-circle mr-2"></i>Poll has ended</p></div>
+      </div>
+    </div>
+    
+    <div class="text-center mt-8"><a href="/" class="text-slate-400 hover:text-indigo-400 transition"><i class="fas fa-arrow-left mr-2"></i>Back to all polls</a></div>
+    
+  </div>
+  
+  <div id="confirmationMessage" class="fixed bottom-6 right-6 hidden z-50"><div class="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3"><i class="fas fa-check-circle"></i><span id="confirmText"></span></div></div>
+  
+  <script>
+    const socket = io();
+    let currentUserHasVoted = false, resultsChart = null;
+    let currentPollId = window.location.pathname.split('/').pop();
+    
+    socket.emit('join:poll', { pollId: currentPollId }, (response) => {
+      if (!response?.success) {
+        document.body.innerHTML = `<div class="min-h-screen flex items-center justify-center"><div class="text-center p-8 bg-white/5 rounded-2xl"><i class="fas fa-exclamation-triangle text-5xl text-amber-500 mb-4"></i><h1 class="text-2xl font-bold text-white">Poll Not Found</h1><p class="text-slate-400 mt-2">${response?.error || 'This poll does not exist'}</p><a href="/" class="mt-4 inline-block bg-indigo-600 px-4 py-2 rounded-lg text-white">← Home</a></div></div>`;
+      }
+    });
+    
+    socket.on('poll:init', (data) => {
+      currentUserHasVoted = data.hasVoted;
+      document.getElementById('pollTitle').textContent = data.title;
+      
+      if (!data.resultsRevealed && data.status !== 'ended') {
+        document.getElementById('resultsArea').classList.add('hidden');
+        document.getElementById('voterArea').classList.remove('hidden');
+        if (data.candidates?.length > 0) {
+          document.getElementById('emptyState').classList.add('hidden');
+          document.getElementById('candidatesGrid').classList.remove('hidden');
+          document.getElementById('voterStats').classList.remove('hidden');
+          renderCandidates(data.candidates, false, data.hasVoted);
+        } else {
+          document.getElementById('emptyState').classList.remove('hidden');
+          document.getElementById('candidatesGrid').classList.add('hidden');
+          document.getElementById('voterStats').classList.add('hidden');
+        }
+      } else if (data.resultsRevealed) {
+        displayResults(data);
+      }
+      document.getElementById('participantCount').textContent = data.participantCount;
+    });
+    
+    socket.on('poll:stats-update', ({ participantCount }) => {
+      document.getElementById('participantCount').textContent = participantCount;
+    });
+    
+    socket.on('candidate:added', (candidate) => {
+      if (!document.getElementById('resultsArea').classList.contains('hidden')) return;
+      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('candidatesGrid').classList.remove('hidden');
+      document.getElementById('voterStats').classList.remove('hidden');
+      appendCandidateToGrid(candidate);
+    });
+    
+    socket.on('candidate:deleted', ({ candidateId }) => {
+      document.querySelector(`.candidate-card[data-id="${candidateId}"]`)?.remove();
+      if (document.querySelectorAll('.candidate-card').length === 0 && !document.getElementById('resultsArea').classList.contains('hidden')) {
+        document.getElementById('emptyState').classList.remove('hidden');
+        document.getElementById('candidatesGrid').classList.add('hidden');
+        document.getElementById('voterStats').classList.add('hidden');
+      }
+    });
+    
+    socket.on('vote:confirmed', ({ candidateName }) => {
+      currentUserHasVoted = true;
+      displayNotification(`Voted for ${candidateName}`, 'success');
+      document.querySelectorAll('.vote-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.textContent = 'VOTED';
+        btn.style.background = '#475569';
+      });
+    });
+    
+    socket.on('results:revealed', (data) => {
+      displayResults(data);
+      canvasConfetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#4f46e5', '#7c3aed'] });
+      setTimeout(() => canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.2 } }), 200);
+      setTimeout(() => canvasConfetti({ particleCount: 100, spread: 100, origin: { y: 0.7, x: 0.8 } }), 400);
+    });
+    
+    socket.on('poll:reset', (data) => {
+      currentUserHasVoted = false;
+      document.getElementById('resultsArea').classList.add('hidden');
+      document.getElementById('voterArea').classList.remove('hidden');
+      renderCandidates(data.candidates, false, false);
+    });
+    
+    socket.on('poll:deleted', () => {
+      displayNotification('This poll has been deleted', 'error');
+      setTimeout(() => window.location.href = '/', 2000);
+    });
+    
+    function renderCandidates(candidates, showPercentages, hasVoted) {
+      const grid = document.getElementById('candidatesGrid');
+      if (!candidates?.length) return;
+      grid.innerHTML = candidates.map(c => `
+        <div class="candidate-card group" data-id="${c.id}">
+          <img src="${c.imageUrl}" class="candidate-image w-full" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
+          <div class="p-5 text-center">
+            <h3 class="text-xl font-bold text-white mb-3">${escapeHtml(c.name)}</h3>
+            ${showPercentages ? `<div class="mb-4"><div class="bg-slate-700 rounded-full h-2 overflow-hidden"><div class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full" style="width: ${c.percentage}%"></div></div><p class="text-indigo-300 mt-2">${c.percentage}% (${c.votes} votes)</p></div>` : ''}
+            <button class="vote-btn text-white font-semibold py-2.5 px-6 rounded-xl w-full" data-id="${c.id}" data-name="${escapeHtml(c.name)}" ${hasVoted ? 'disabled' : ''}>${hasVoted ? '<i class="fas fa-check mr-2"></i>VOTED' : '<i class="fas fa-vote-yea mr-2"></i>VOTE'}</button>
+          </div>
+        </div>
+      `).join('');
+      if (!hasVoted && !showPercentages) {
+        document.querySelectorAll('.vote-btn:not(:disabled)').forEach(btn => {
+          btn.addEventListener('click', () => submitVote(btn.dataset.id, btn.dataset.name));
+        });
+      }
+    }
+    
+    function appendCandidateToGrid(candidate) {
+      const grid = document.getElementById('candidatesGrid');
+      const card = document.createElement('div');
+      card.className = 'candidate-card group';
+      card.setAttribute('data-id', candidate.id);
+      card.innerHTML = `
+        <img src="${candidate.imageUrl}" class="candidate-image w-full" onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
+        <div class="p-5 text-center">
+          <h3 class="text-xl font-bold text-white mb-3">${escapeHtml(candidate.name)}</h3>
+          <button class="vote-btn text-white font-semibold py-2.5 px-6 rounded-xl w-full" data-id="${candidate.id}" data-name="${escapeHtml(candidate.name)}" ${currentUserHasVoted ? 'disabled' : ''}>${currentUserHasVoted ? '<i class="fas fa-check mr-2"></i>VOTED' : '<i class="fas fa-vote-yea mr-2"></i>VOTE'}</button>
+        </div>
+      `;
+      if (!currentUserHasVoted) {
+        card.querySelector('.vote-btn').addEventListener('click', () => submitVote(candidate.id, candidate.name));
+      }
+      grid.appendChild(card);
+    }
+    
+    function submitVote(id, name) {
+      if (currentUserHasVoted) { displayNotification('Already voted', 'error'); return; }
+      socket.emit('vote:cast', { candidateId: id });
+    }
+    
+    function displayResults(data) {
+      document.getElementById('voterArea').classList.add('hidden');
+      document.getElementById('resultsArea').classList.remove('hidden');
+      document.getElementById('winnerText').innerHTML = `<i class="fas fa-trophy mr-3"></i>${data.winnerText || 'No winner'}`;
+      document.getElementById('finalTotalVotes').textContent = data.totalVotes;
+      document.getElementById('finalParticipants').textContent = data.participantCount;
+      if (resultsChart) resultsChart.destroy();
+      resultsChart = new Chart(document.getElementById('resultsChart'), {
+        type: 'bar',
+        data: { labels: data.candidates.map(c => c.name), datasets: [{ label: 'Votes (%)', data: data.candidates.map(c => c.percentage), backgroundColor: 'rgba(99,102,241,0.7)', borderRadius: 8 }] },
+        options: { responsive: true, scales: { y: { beginAtZero: true, max: 100, ticks: { color: '#cbd5e1', callback: v => v + '%' } }, x: { ticks: { color: '#cbd5e1' } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }
+      });
+    }
+    
+    function displayNotification(msg, type) {
+      const toast = document.getElementById('confirmationMessage'), span = document.getElementById('confirmText'), icon = toast.querySelector('i');
+      span.textContent = msg;
+      toast.classList.remove('hidden', 'toast-fade-out');
+      const div = toast.querySelector('div');
+      if (type === 'error') { div.className = 'bg-gradient-to-r from-rose-600 to-pink-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3'; icon.className = 'fas fa-exclamation-circle'; }
+      else { div.className = 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3'; icon.className = 'fas fa-check-circle'; }
+      setTimeout(() => { toast.classList.add('toast-fade-out'); setTimeout(() => toast.classList.add('hidden'), 3000); }, 2800);
+    }
+    
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
+  </script>
+</body>
+</html>

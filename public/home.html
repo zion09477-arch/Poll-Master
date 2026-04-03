@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poll Master | All Polls</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0f172a, #1e1b4b); background-size: 400% 400%; animation: gradientShift 15s ease infinite; }
+    @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    .poll-card { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1rem; transition: all 0.3s ease; }
+    .poll-card:hover { transform: translateY(-5px); border-color: rgba(99, 102, 241, 0.5); box-shadow: 0 20px 25px -12px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="container mx-auto px-4 py-12 max-w-6xl">
+    
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <div class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <i class="fas fa-chart-simple text-3xl text-white"></i>
+        </div>
+        <h1 class="text-6xl font-black bg-gradient-to-r from-white via-indigo-200 to-purple-200 bg-clip-text text-transparent">POLL MASTER</h1>
+      </div>
+      <p class="text-indigo-200 text-lg">Real-time voting platform</p>
+    </div>
+    
+    <!-- Polls Grid -->
+    <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-2"><i class="fas fa-list-ul text-indigo-400"></i> Active Polls</h2>
+    <div id="pollsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="col-span-full text-center py-12">
+        <i class="fas fa-spinner fa-pulse text-4xl text-indigo-400"></i>
+        <p class="text-slate-400 mt-3">Loading polls...</p>
+      </div>
+    </div>
+    
+    <!-- Admin Link -->
+    <div class="text-center mt-12 pt-8 border-t border-white/10">
+      <p class="text-slate-500 text-sm">Administrator? <a href="#" id="adminHint" class="text-indigo-400 hover:text-indigo-300">Double-click the logo</a> to access admin panel</p>
+    </div>
+    
+  </div>
+  
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    
+    function loadPolls() {
+      fetch('/api/polls')
+        .then(res => res.json())
+        .then(polls => {
+          const grid = document.getElementById('pollsGrid');
+          const pollArray = Object.values(polls);
+          
+          if (pollArray.length === 0) {
+            grid.innerHTML = `
+              <div class="col-span-full text-center py-16 bg-white/5 rounded-2xl backdrop-blur">
+                <i class="fas fa-info-circle text-5xl text-slate-500 mb-3"></i>
+                <p class="text-slate-400 text-xl">No polls available</p>
+                <p class="text-slate-500 text-sm mt-2">Check back later or contact the administrator</p>
+              </div>
+            `;
+            return;
+          }
+          
+          grid.innerHTML = pollArray.map(poll => `
+            <div class="poll-card p-6">
+              <div class="flex items-start justify-between mb-3">
+                <i class="fas fa-poll text-indigo-400 text-2xl"></i>
+                ${poll.status === 'ended' ? '<span class="bg-rose-500/20 text-rose-300 text-xs px-2 py-1 rounded-full">Ended</span>' : '<span class="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-1 rounded-full">Live</span>'}
+              </div>
+              <h3 class="text-xl font-bold text-white mb-2">${escapeHtml(poll.title)}</h3>
+              <div class="flex justify-between text-slate-400 text-sm mb-4">
+                <span><i class="fas fa-users mr-1"></i> ${poll.candidateCount} candidates</span>
+                <span><i class="fas fa-vote-yea mr-1"></i> ${poll.totalVotes} votes</span>
+              </div>
+              <a href="/poll/${poll.id}" class="block w-full text-center bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold py-2.5 rounded-xl transition-all duration-300">
+                <i class="fas fa-sign-in-alt mr-2"></i> Join Poll
+              </a>
+            </div>
+          `).join('');
+        })
+        .catch(err => {
+          document.getElementById('pollsGrid').innerHTML = `
+            <div class="col-span-full text-center py-16 bg-white/5 rounded-2xl">
+              <i class="fas fa-exclamation-triangle text-5xl text-amber-500 mb-3"></i>
+              <p class="text-slate-400">Error loading polls</p>
+            </div>
+          `;
+        });
+    }
+    
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+    
+    document.getElementById('adminHint')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = '/admin.html';
+    });
+    
+    loadPolls();
+  </script>
+</body>
+</html>

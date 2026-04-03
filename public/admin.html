@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poll Master | Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0f172a, #1e1b4b); background-size: 400% 400%; animation: gradientShift 15s ease infinite; }
+    @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    .admin-card { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 1rem; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-5xl">
+    
+    <div class="text-center mb-8">
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <div class="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center"><i class="fas fa-crown text-2xl text-white"></i></div>
+        <h1 class="text-5xl font-black bg-gradient-to-r from-white via-amber-200 to-orange-200 bg-clip-text text-transparent">ADMIN PANEL</h1>
+      </div>
+      <p class="text-slate-300">Poll Master Administrator Console</p>
+    </div>
+    
+    <!-- Auth Section -->
+    <div id="authSection" class="max-w-md mx-auto mb-8">
+      <div class="admin-card p-8">
+        <h2 class="text-xl font-bold text-white mb-4"><i class="fas fa-shield-alt mr-2 text-amber-400"></i>Authentication Required</h2>
+        <input type="password" id="adminSecret" placeholder="Enter secret code" class="w-full px-4 py-2 rounded-lg bg-slate-800 text-white border border-slate-700 mb-3 focus:border-indigo-400 focus:outline-none">
+        <button id="unlockBtn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold py-2 rounded-lg transition"><i class="fas fa-unlock-alt mr-2"></i>Authenticate</button>
+        <p id="authError" class="text-red-400 text-sm mt-3 hidden text-center"></p>
+        <p class="text-slate-500 text-xs text-center mt-4"><a href="/" class="text-indigo-400 hover:underline">← Back to Home</a></p>
+      </div>
+    </div>
+    
+    <!-- Admin Content -->
+    <div id="adminContent" class="hidden">
+      <!-- Create Poll -->
+      <div class="admin-card p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4"><i class="fas fa-plus-circle mr-2 text-emerald-400"></i>Create New Poll</h2>
+        <div class="flex flex-col md:flex-row gap-3">
+          <input type="text" id="newPollTitle" placeholder="Poll title" class="flex-1 px-4 py-2 rounded-lg bg-slate-800 text-white border border-slate-700 focus:border-indigo-400 focus:outline-none">
+          <button id="createPollBtn" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold px-6 py-2 rounded-lg transition"><i class="fas fa-plus mr-2"></i>Create</button>
+        </div>
+        <div id="shareContainer" class="mt-4 hidden">
+          <p class="text-slate-400 text-sm mb-2"><i class="fas fa-link mr-1"></i>Shareable link:</p>
+          <div class="flex gap-2">
+            <input type="text" id="shareLink" readonly class="flex-1 px-3 py-2 rounded-lg bg-slate-800 text-slate-300 text-sm border border-slate-700">
+            <button id="copyLink" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm transition"><i class="fas fa-copy"></i> Copy</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Polls List -->
+      <div class="admin-card p-6 mb-6">
+        <h2 class="text-xl font-bold text-white mb-4"><i class="fas fa-list mr-2 text-indigo-400"></i>Your Polls</h2>
+        <div id="pollsList" class="space-y-2 max-h-64 overflow-y-auto">
+          <p class="text-slate-500 text-center py-4">No polls yet</p>
+        </div>
+      </div>
+      
+      <!-- Edit Section -->
+      <div id="editSection" class="admin-card p-6 hidden">
+        <h2 class="text-xl font-bold text-white mb-4"><i class="fas fa-edit mr-2 text-amber-400"></i>Editing: <span id="editingTitle">-</span></h2>
+        
+        <div class="mb-4">
+          <label class="text-slate-300 text-sm block mb-2">Update Title</label>
+          <div class="flex gap-2">
+            <input type="text" id="updateTitleInput" placeholder="New title" class="flex-1 px-3 py-2 rounded-lg bg-slate-800 text-white border border-slate-700 focus:border-indigo-400 focus:outline-none">
+            <button id="updateTitleBtn" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg transition"><i class="fas fa-save"></i> Update</button>
+          </div>
+        </div>
+        
+        <div class="mb-4">
+          <label class="text-slate-300 text-sm block mb-2">Add Candidate</label>
+          <div class="grid md:grid-cols-2 gap-2 mb-2">
+            <input type="text" id="candidateName" placeholder="Candidate name" class="px-3 py-2 rounded-lg bg-slate-800 text-white border border-slate-700 focus:border-indigo-400 focus:outline-none">
+            <input type="text" id="candidateImage" placeholder="Image URL (optional)" class="px-3 py-2 rounded-lg bg-slate-800 text-white border border-slate-700 focus:border-indigo-400 focus:outline-none">
+          </div>
+          <button id="addCandidateBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg transition"><i class="fas fa-user-plus mr-2"></i>Add Candidate</button>
+        </div>
+        
+        <div class="flex flex-wrap gap-3 mb-4">
+          <button id="resetVotesBtn" class="bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg transition"><i class="fas fa-undo mr-2"></i>Reset Votes</button>
+          <button id="deletePollBtn" class="bg-rose-600 hover:bg-rose-700 px-4 py-2 rounded-lg transition"><i class="fas fa-trash mr-2"></i>Delete Poll</button>
+          <button id="revealResultsBtn" class="bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 px-4 py-2 rounded-lg transition"><i class="fas fa-chart-line mr-2"></i>Reveal Results</button>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="bg-indigo-500/10 rounded-lg p-3 text-center"><i class="fas fa-vote-yea text-indigo-400"></i><p id="totalVotesDisplay" class="text-2xl font-bold text-white">0</p><p class="text-slate-400 text-xs">votes</p></div>
+          <div class="bg-emerald-500/10 rounded-lg p-3 text-center"><i class="fas fa-users text-emerald-400"></i><p id="participantsDisplay" class="text-2xl font-bold text-white">0</p><p class="text-slate-400 text-xs">participants</p></div>
+        </div>
+        
+        <h3 class="text-white font-semibold mb-2"><i class="fas fa-users mr-2"></i>Candidates</h3>
+        <div id="candidatesList" class="space-y-2 max-h-48 overflow-y-auto">
+          <p class="text-slate-500 text-center py-2">No candidates</p>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <div id="toast" class="fixed bottom-6 right-6 hidden z-50"><div class="bg-emerald-600 text-white px-5 py-2 rounded-lg shadow-lg"><span id="toastMsg"></span></div></div>
+  
+  <script>
+    const socket = io();
+    let isAdmin = false;
+    let currentEditPollId = null;
+    
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toast'), span = document.getElementById('toastMsg');
+      span.textContent = msg;
+      toast.classList.remove('hidden');
+      const div = toast.querySelector('div');
+      div.className = isError ? 'bg-rose-600 text-white px-5 py-2 rounded-lg shadow-lg' : 'bg-emerald-600 text-white px-5 py-2 rounded-lg shadow-lg';
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+    
+    document.getElementById('unlockBtn')?.addEventListener('click', () => {
+      const secret = document.getElementById('adminSecret').value;
+      if (secret) socket.emit('admin:unlock', { secret });
+      else showToast('Enter secret code', true);
+    });
+    
+    socket.on('admin:unlocked', ({ success, error }) => {
+      if (success) {
+        isAdmin = true;
+        document.getElementById('authSection').classList.add('hidden');
+        document.getElementById('adminContent').classList.remove('hidden');
+        showToast('Admin access granted');
+        socket.emit('admin:get-polls');
+      } else {
+        document.getElementById('authError').textContent = error;
+        document.getElementById('authError').classList.remove('hidden');
+        setTimeout(() => document.getElementById('authError').classList.add('hidden'), 3000);
+      }
+    });
+    
+    socket.on('admin:polls-list', ({ polls }) => {
+      const container = document.getElementById('pollsList');
+      if (!polls.length) { container.innerHTML = '<p class="text-slate-500 text-center py-4">No polls yet</p>'; return; }
+      container.innerHTML = polls.map(p => `
+        <div class="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
+          <div><p class="text-white font-medium">${escapeHtml(p.title)}</p><p class="text-xs text-slate-400">${p.candidateCount} candidates · ${p.totalVotes} votes</p></div>
+          <button class="edit-poll bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg text-sm transition" data-id="${p.id}"><i class="fas fa-edit"></i> Edit</button>
+        </div>
+      `).join('');
+      document.querySelectorAll('.edit-poll').forEach(btn => btn.addEventListener('click', () => editPoll(btn.dataset.id)));
+    });
+    
+    function editPoll(pollId) {
+      currentEditPollId = pollId;
+      socket.emit('admin:get-edit-poll', { pollId }, (response) => {
+        if (response?.success) {
+          document.getElementById('editSection').classList.remove('hidden');
+          document.getElementById('editingTitle').textContent = response.poll.title;
+          document.getElementById('totalVotesDisplay').textContent = response.poll.totalVotes;
+          document.getElementById('participantsDisplay').textContent = response.poll.participantCount;
+          renderCandidatesList(response.poll.candidates);
+        }
+      });
+    }
+    
+    function renderCandidatesList(candidates) {
+      const container = document.getElementById('candidatesList');
+      if (!candidates?.length) { container.innerHTML = '<p class="text-slate-500 text-center py-2">No candidates</p>'; return; }
+      container.innerHTML = candidates.map(c => `
+        <div class="flex justify-between items-center p-2 bg-slate-800/50 rounded-lg">
+          <span class="text-white">${escapeHtml(c.name)}</span>
+          <div class="flex items-center gap-3"><span class="text-indigo-300 text-sm">${c.votes} votes</span><button class="delete-candidate bg-rose-600/80 hover:bg-rose-600 px-2 py-1 rounded text-xs transition" data-id="${c.id}"><i class="fas fa-trash"></i></button></div>
+        </div>
+      `).join('');
+      document.querySelectorAll('.delete-candidate').forEach(btn => btn.addEventListener('click', () => socket.emit('candidate:delete', { candidateId: btn.dataset.id })));
+    }
+    
+    socket.on('admin:edit-poll-update', (data) => {
+      if (data.pollId === currentEditPollId) {
+        document.getElementById('totalVotesDisplay').textContent = data.totalVotes;
+        document.getElementById('participantsDisplay').textContent = data.participantCount;
+        renderCandidatesList(data.candidates);
+      }
+    });
+    
+    document.getElementById('createPollBtn')?.addEventListener('click', () => {
+      const title = document.getElementById('newPollTitle').value;
+      if (!title) { showToast('Enter poll title', true); return; }
+      socket.emit('poll:create', { title }, (response) => {
+        if (response?.success) {
+          showToast('Poll created!');
+          document.getElementById('shareContainer').classList.remove('hidden');
+          document.getElementById('shareLink').value = response.shareableLink;
+          document.getElementById('newPollTitle').value = '';
+          socket.emit('admin:get-polls');
+        }
+      });
+    });
+    
+    document.getElementById('copyLink')?.addEventListener('click', () => {
+      const input = document.getElementById('shareLink');
+      input.select(); document.execCommand('copy');
+      showToast('Link copied!');
+    });
+    
+    document.getElementById('updateTitleBtn')?.addEventListener('click', () => {
+      const title = document.getElementById('updateTitleInput').value;
+      if (title) { socket.emit('poll:update-title', { title }); document.getElementById('updateTitleInput').value = ''; showToast('Title updated'); }
+    });
+    
+    document.getElementById('addCandidateBtn')?.addEventListener('click', () => {
+      const name = document.getElementById('candidateName').value;
+      if (!name) { showToast('Enter candidate name', true); return; }
+      socket.emit('candidate:add', { name, imageUrl: document.getElementById('candidateImage').value });
+      document.getElementById('candidateName').value = '';
+      document.getElementById('candidateImage').value = '';
+      showToast('Candidate added');
+    });
+    
+    document.getElementById('resetVotesBtn')?.addEventListener('click', () => {
+      if (confirm('Reset all votes?')) socket.emit('admin:reset-poll');
+    });
+    
+    document.getElementById('deletePollBtn')?.addEventListener('click', () => {
+      if (confirm('PERMANENTLY delete this poll?')) {
+        socket.emit('poll:delete', { pollId: currentEditPollId }, () => {
+          showToast('Poll deleted');
+          document.getElementById('editSection').classList.add('hidden');
+          socket.emit('admin:get-polls');
+        });
+      }
+    });
+    
+    document.getElementById('revealResultsBtn')?.addEventListener('click', () => {
+      if (confirm('Reveal results? Voting will close.')) socket.emit('admin:reveal-results');
+    });
+    
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m])); }
+  </script>
+</body>
+</html>

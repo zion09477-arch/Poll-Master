@@ -6,6 +6,7 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 const server = http.createServer(app);
@@ -15,13 +16,12 @@ const io = socketIo(server, {
 
 const ADMIN_SECRET = "admin12345";
 
-// Store polls with unique IDs
 let polls = {};
 let adminSocketId = null;
-let votedSockets = new Map(); // socketId -> pollId
+let votedSockets = new Map();
 
 function generatePollId() {
-  return Math.random().toString(36).substring(2, 8) + Date.now().toString(36);
+  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
 function calculateWinnerText(candidates, totalVotes) {
@@ -38,38 +38,49 @@ function addPercentages(candidates, total) {
   return candidates.map(c => ({ ...c, percentage: total > 0 ? (c.votes / total * 100).toFixed(1) : 0 }));
 }
 
-// Serve poll page with specific poll ID
+// API endpoint to get all polls for homepage
+app.get('/api/polls', (req, res) => {
+  const pollList = Object.entries(polls).map(([id, p]) => ({
+    id,
+    title: p.title,
+    candidateCount: p.candidates.length,
+    totalVotes: p.totalVotes,
+    status: p.status,
+    hasEnded: p.status === "ended"
+  }));
+  res.json(polls);
+});
+
+// Serve homepage
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/home.html'));
+});
+
+// Serve individual poll page
 app.get('/poll/:pollId', (req, res) => {
   const { pollId } = req.params;
   if (!polls[pollId]) {
     return res.status(404).send(`
       <!DOCTYPE html>
       <html>
-      <head><title>Poll Not Found</title><script src="https://cdn.tailwindcss.com"></script></head>
+      <head><title>Poll Not Found</title><script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head>
       <body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen flex items-center justify-center">
         <div class="text-center p-8 bg-white/5 rounded-2xl backdrop-blur">
           <i class="fas fa-exclamation-triangle text-5xl text-amber-500 mb-4"></i>
           <h1 class="text-2xl font-bold text-white mb-2">Poll Not Found</h1>
           <p class="text-slate-400">This poll doesn't exist or has been deleted.</p>
+          <a href="/" class="mt-4 inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition">← Back to Home</a>
         </div>
       </body>
       </html>
     `);
   }
-  res.sendFile(path.join(__dirname, '../public/index.html'));
-});
-
-// API endpoint for admin to get poll link
-app.get('/api/poll/:pollId', (req, res) => {
-  const { pollId } = req.params;
-  if (!polls[pollId]) return res.status(404).json({ error: 'Not found' });
-  res.json({ pollId, title: polls[pollId].title });
+  res.sendFile(path.join(__dirname, '../public/poll.html'));
 });
 
 io.on('connection', (socket) => {
   console.log(`[INFO] User connected: ${socket.id}`);
 
-  // Join a specific poll room
   socket.on('join:poll', ({ pollId }, callback) => {
     if (!polls[pollId]) {
       if (callback) callback({ success: false, error: 'Poll not found' });
@@ -91,11 +102,10 @@ io.on('connection', (socket) => {
       totalVotes: poll.totalVotes,
       participantCount: poll.participantCount,
       candidates: poll.resultsRevealed ? addPercentages(poll.candidates, poll.totalVotes) : poll.candidates,
-      hasVoted: hasVoted,
-      shareableLink: `${getBaseUrl()}/poll/${pollId}`
+      hasVoted: hasVoted
     });
     
-    socket.emit('poll:participants', poll.participantCount);
+    io.to(`poll:${pollId}`).emit('poll:participants', poll.participantCount);
     
     if (callback) callback({ success: true });
   });
@@ -125,7 +135,7 @@ io.on('connection', (socket) => {
     };
     const shareableLink = `${getBaseUrl()}/poll/${pollId}`;
     callback?.({ success: true, pollId, shareableLink });
-    // Notify admin of updated poll list
+    
     const pollList = Object.entries(polls).map(([id, p]) => ({
       id, title: p.title, candidateCount: p.candidates.length, totalVotes: p.totalVotes, status: p.status
     }));
@@ -137,18 +147,14 @@ io.on('connection', (socket) => {
     if (socket.id !== adminSocketId) return callback?.({ success: false });
     if (!polls[pollId]) return callback?.({ success: false, error: 'Poll not found' });
     
-    // Notify all users in that poll room to redirect
-    io.to(`poll:${pollId}`).emit('poll:deleted', { message: 'This poll has been deleted by the administrator' });
+    io.to(`poll:${pollId}`).emit('poll:deleted', { message: 'This poll has been deleted' });
     
-    // Remove the poll
     delete polls[pollId];
     
-    // Clean up voted sockets for this poll
     for (let [sockId, pollIdVoted] of votedSockets.entries()) {
       if (pollIdVoted === pollId) votedSockets.delete(sockId);
     }
     
-    // Update admin's poll list
     const pollList = Object.entries(polls).map(([id, p]) => ({
       id, title: p.title, candidateCount: p.candidates.length, totalVotes: p.totalVotes, status: p.status
     }));
@@ -186,14 +192,20 @@ io.on('connection', (socket) => {
     callback?.({ success: true });
   });
 
-  // Admin: add candidate
+  // Admin: add candidate - FIXED
   socket.on('candidate:add', (data, callback) => {
-    if (socket.id !== adminSocketId) return callback?.({ success: false });
+    if (socket.id !== adminSocketId) {
+      if (callback) callback({ success: false, error: "Unauthorized" });
+      return;
+    }
     const pollId = socket.currentEditPollId;
-    if (!pollId || !polls[pollId]) return callback?.({ success: false });
+    if (!pollId || !polls[pollId]) {
+      if (callback) callback({ success: false, error: "No poll selected" });
+      return;
+    }
     
     const newCandidate = {
-      id: Date.now() + Math.random().toString(36).substr(2, 4),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       name: data.name,
       imageUrl: data.imageUrl || "https://via.placeholder.com/300x200?text=No+Image",
       votes: 0
@@ -204,7 +216,15 @@ io.on('connection', (socket) => {
       id: newCandidate.id, name: newCandidate.name, imageUrl: newCandidate.imageUrl
     });
     
-    callback?.({ success: true, candidate: newCandidate });
+    // Update admin with fresh data
+    io.to(adminSocketId).emit('admin:edit-poll-update', {
+      pollId: pollId,
+      candidates: polls[pollId].candidates,
+      totalVotes: polls[pollId].totalVotes,
+      participantCount: polls[pollId].participantCount
+    });
+    
+    if (callback) callback({ success: true, candidate: newCandidate });
   });
 
   // Admin: delete candidate
@@ -218,6 +238,14 @@ io.on('connection', (socket) => {
       polls[pollId].totalVotes -= polls[pollId].candidates[idx].votes;
       polls[pollId].candidates.splice(idx, 1);
       io.to(`poll:${pollId}`).emit('candidate:deleted', { candidateId });
+      
+      io.to(adminSocketId).emit('admin:edit-poll-update', {
+        pollId: pollId,
+        candidates: polls[pollId].candidates,
+        totalVotes: polls[pollId].totalVotes,
+        participantCount: polls[pollId].participantCount
+      });
+      
       callback?.({ success: true });
     } else {
       callback?.({ success: false });
@@ -271,7 +299,7 @@ io.on('connection', (socket) => {
     callback?.({ success: true });
   });
 
-  // Admin: reset poll votes (not delete)
+  // Admin: reset poll votes
   socket.on('admin:reset-poll', (_, callback) => {
     if (socket.id !== adminSocketId) return callback?.({ success: false });
     const pollId = socket.currentEditPollId;
@@ -284,7 +312,6 @@ io.on('connection', (socket) => {
     poll.resultsRevealed = false;
     poll.winnerText = null;
     
-    // Clear votes for this poll
     for (let [sId, pId] of votedSockets.entries()) {
       if (pId === pollId) votedSockets.delete(sId);
     }
@@ -311,6 +338,23 @@ io.on('connection', (socket) => {
     } else {
       callback?.({ success: false, error: "Invalid credentials" });
     }
+  });
+  
+  // Admin edit poll update listener
+  socket.on('admin:get-edit-poll', ({ pollId }, callback) => {
+    if (socket.id !== adminSocketId) return;
+    if (!polls[pollId]) return callback?.({ success: false });
+    callback({
+      success: true,
+      poll: {
+        id: polls[pollId].id,
+        title: polls[pollId].title,
+        candidates: polls[pollId].candidates,
+        totalVotes: polls[pollId].totalVotes,
+        participantCount: polls[pollId].participantCount,
+        status: polls[pollId].status
+      }
+    });
   });
 
   socket.on('disconnect', () => {
